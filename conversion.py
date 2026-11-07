@@ -1,4 +1,9 @@
-def convert(file_in, file_out):
+import cv2
+import argparse
+import numpy as np
+
+
+def convert(file_in, file_out, save, display):
     with open(file_in, "rb") as input:  # read pgm
         input.read(2)  # magic number
         input.read(1)  # separator
@@ -10,11 +15,6 @@ def convert(file_in, file_out):
         input.read(1)  # separator
 
         pixels = input.read()
-
-    if int(max_value) > 255:
-        pixel_size = 2
-    else:
-        pixel_size = 1
 
     chroma_width = int(width) // 2
     Y_height = int(height) * 2 // 3
@@ -36,45 +36,73 @@ def convert(file_in, file_out):
         for j in range(chroma_width, chroma_width * 2):
             V.append(pixels[(Y_height + i) * width + j])
 
-    with open(file_out, "wb") as out:  # write ppm
-        out.write(b"P3\n")
-        out.write(f"{int(width)} {int(Y_height)}\n".encode())
-        out.write(f"{int(max_value)}\n".encode())
+    # create ppm
+    out = b""
+    if save:
+        out = b"P3\n"
+        out += f"{int(width)} {int(Y_height)}\n".encode()
+        out += f"{int(max_value)}\n".encode()
 
-        for i in range(Y_height):
-            line = ""
-            for j in range(width):
-                y_current = Y[i * width + j] - 16
-                u_current = U[(i // 2) * chroma_width + (j // 2)] - 128
-                v_current = V[(i // 2) * chroma_width + (j // 2)] - 128
+    # create image for display
+    img = np.empty((int(Y_height), int(width), 3), dtype=np.uint8)
 
-                r_current = max(
-                    0,
-                    min(
-                        round(y_current + 1.164 * v_current + 1.596 * v_current),
-                        int(max_value),
-                    ),
-                )
-                g_current = max(
-                    0,
-                    min(
-                        round(
-                            y_current * 1.164 - u_current * 0.392 - v_current * 0.813
-                        ),
-                        int(max_value),
-                    ),
-                )
-                b_current = max(
-                    0,
-                    min(
-                        round(y_current * 1.164 + 2.017 * u_current), int(max_value)
-                    ),  # 1,164 × Y' + 2,017 × U'
-                )
+    for i in range(Y_height):
+        line = ""
+        for j in range(width):
+            y_current = Y[i * width + j] - 16
+            u_current = U[(i // 2) * chroma_width + (j // 2)] - 128
+            v_current = V[(i // 2) * chroma_width + (j // 2)] - 128
 
+            r_current = max(
+                0,
+                min(
+                    round(y_current * 1.164 + 1.596 * v_current),
+                    int(max_value),
+                ),
+            )
+            g_current = max(
+                0,
+                min(
+                    round(y_current * 1.164 - u_current * 0.392 - v_current * 0.813),
+                    int(max_value),
+                ),
+            )
+            b_current = max(
+                0,
+                min(round(y_current * 1.164 + 2.017 * u_current), int(max_value)),
+            )
+            if save:
                 line += (
                     str(r_current) + " " + str(g_current) + " " + str(b_current) + "\n"
                 )
-            out.write(line.encode())
+
+            if display:
+                img[i, j] = np.array([b_current, g_current, r_current])
+        if save:
+            out += line.encode()
+
+    if save:
+        with open(file_out, "wb") as out_file:  # write ppm
+            out_file.write(out)
+
+    if display:
+        cv2.imshow("Image", img)  # display image
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
 
 
-convert("images_stack/0.pgm", "test.ppm")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("file_in")
+    parser.add_argument("--save", nargs="?", const="out.ppm", default=None)
+    parser.add_argument("--display", action="store_true")
+    args = parser.parse_args()
+    if args.save is None and not args.display:
+        args.save = "out.ppm"
+    print(args.file_in)
+    print(args.save)
+    print(args.display)
+    convert(args.file_in, args.save, args.save is not None, args.display)
+
+# convert("images_stack/0.pgm", "test.ppm")
