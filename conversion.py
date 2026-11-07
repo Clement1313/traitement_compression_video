@@ -44,22 +44,31 @@ def convert(file_in, file_out):
         for i in range(Y_height):
             line = ""
             for j in range(width):
-                y_current = Y[i * width + j]
-                u_current = U[(i // 2) * chroma_width + (j // 2)]
-                v_current = V[(i // 2) * chroma_width + (j // 2)]
+                y_current = Y[i * width + j] - 16
+                u_current = U[(i // 2) * chroma_width + (j // 2)] - 128
+                v_current = V[(i // 2) * chroma_width + (j // 2)] - 128
 
                 r_current = max(
-                    0, min(round(y_current + 1.140 * v_current), int(max_value))
+                    0,
+                    min(
+                        round(y_current + 1.164 * v_current + 1.596 * v_current),
+                        int(max_value),
+                    ),
                 )
                 g_current = max(
                     0,
                     min(
-                        round(y_current - 0.395 * u_current - 0.581 * v_current),
+                        round(
+                            y_current * 1.164 - u_current * 0.392 - v_current * 0.813
+                        ),
                         int(max_value),
                     ),
                 )
                 b_current = max(
-                    0, min(round(y_current + 2.032 * u_current), int(max_value))
+                    0,
+                    min(
+                        round(y_current * 1.164 + 2.017 * u_current), int(max_value)
+                    ),  # 1,164 × Y' + 2,017 × U'
                 )
 
                 line += (
