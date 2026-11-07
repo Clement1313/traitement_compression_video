@@ -1,6 +1,7 @@
 import cv2
 import argparse
 import numpy as np
+import os
 
 
 def convert(file_in, file_out, save, display):
@@ -91,6 +92,22 @@ def convert(file_in, file_out, save, display):
         cv2.destroyAllWindows()
 
 
+def handle_directories(input, out, save, display):
+    if not os.path.exists(input):
+        raise Exception("Invalid path")
+    if os.path.isfile(input):
+        convert(input, out, save, display)
+    else:
+        if not os.path.exists(out):
+            os.makedirs(out)
+
+        for i, e in enumerate(os.scandir(input)):
+            if i % 10 == 0:
+                print(f"image {i}...")
+            if e.is_file():
+                convert(e, f"{out}/{i}.ppm", save, display)
+        print("Done :)")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -99,10 +116,10 @@ if __name__ == "__main__":
     parser.add_argument("--display", action="store_true")
     args = parser.parse_args()
     if args.save is None and not args.display:
-        args.save = "out.ppm"
-    print(args.file_in)
-    print(args.save)
-    print(args.display)
-    convert(args.file_in, args.save, args.save is not None, args.display)
+        if os.path.isdir(args.file_in):
+            args.save = "out"
+        else:
+            args.save = "out.ppm"
+    handle_directories(args.file_in, args.save, args.save is not None, args.display)
 
 # convert("images_stack/0.pgm", "test.ppm")
