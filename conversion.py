@@ -82,37 +82,62 @@ def convert(file_in, file_out, save, display):
         if save:
             out += line.encode()
 
+    if save and display:
+        return out, img
+
     if save:
-        with open(file_out, "wb") as out_file:  # write ppm
-            out_file.write(out)
+        return out, None
 
     if display:
-        cv2.imshow("Image", img)  # display image
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+        return None, img
+
+
+def save_image(out, file_out):
+    with open(file_out, "wb") as out_file:  # write ppm
+        out_file.write(out)
+
+
+def display_image(img):
+    cv2.imshow("Image", img)  # display image
+    cv2.waitKey(500)
 
 
 def handle_directories(input, out, save, display):
     if not os.path.exists(input):
         raise Exception("Invalid path")
     if os.path.isfile(input):
-        convert(input, out, save, display)
+        ppm, to_display = convert(input, out, save, display)
+        if save:
+            save_image(ppm, out)
+        if display:
+            display_image(to_display)
     else:
-        if not os.path.exists(out):
+        if save and not os.path.exists(out):
             os.makedirs(out)
+        if display:
+            image_pile = []
 
         for i, e in enumerate(os.scandir(input)):
             if i % 10 == 0:
                 print(f"image {i}...")
             if e.is_file():
-                convert(e, f"{out}/{i}.ppm", save, display)
+                ppm, to_display = convert(e, f"{out}/{e.name}.ppm", save, display)
+                if save:
+                    name = f"{out}/{os.path.basename(e.name).split('.')[0]}.ppm"
+                    save_image(ppm, name)
+                if display:
+                    image_pile.append(to_display)
+                #     display_image(to_display)
+        for image in image_pile:
+            display_image(image)
+            cv2.destroyAllWindows()
         print("Done :)")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("file_in")
-    parser.add_argument("--save", nargs="?", const="out.ppm", default=None)
+    parser.add_argument("--save", nargs="?", const=None, default=None)
     parser.add_argument("--display", action="store_true")
     args = parser.parse_args()
     if args.save is None and not args.display:
