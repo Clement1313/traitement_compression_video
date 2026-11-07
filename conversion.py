@@ -4,7 +4,7 @@ import numpy as np
 import os
 
 
-def convert(file_in, file_out, save, display):
+def convert(file_in, save, display):
     with open(file_in, "rb") as input:  # read pgm
         input.read(2)  # magic number
         input.read(1)  # separator
@@ -82,44 +82,82 @@ def convert(file_in, file_out, save, display):
         if save:
             out += line.encode()
 
+    if save and display:
+        return out, img
+
     if save:
-        with open(file_out, "wb") as out_file:  # write ppm
-            out_file.write(out)
+        return out, None
 
     if display:
-        cv2.imshow("Image", img)  # display image
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+        return None, img
 
 
-def handle_directories(input, out, save, display):
+def save_image(out, file_out):
+    with open(file_out, "wb") as out_file:  # write ppm
+        out_file.write(out)
+
+
+def display_image(img, ips=1):
+    cv2.imshow("Image", img)  # display image
+    cv2.waitKey(round(max(1, 1000 / ips)))
+
+
+def handle_directories(input, out, save, display, ips):
     if not os.path.exists(input):
         raise Exception("Invalid path")
     if os.path.isfile(input):
-        convert(input, out, save, display)
+        ppm, to_display = convert(input, out, save, display)
+        if save:
+            save_image(ppm, out)
+        if display:
+            display_image(to_display)
     else:
-        if not os.path.exists(out):
+        if save and not os.path.exists(out):
             os.makedirs(out)
+        image_pile = []
 
-        for i, e in enumerate(os.scandir(input)):
+        names = os.listdir(input)
+        sorted_names = []
+        for name in names:
+            if not name.endswith(".pgm"):
+                continue
+            sorted_names.append(int(name.split(".")[0]))  # remove extention
+
+        sorted_names = sorted(sorted_names)
+
+        for i, e in enumerate(sorted_names):
             if i % 10 == 0:
                 print(f"image {i}...")
-            if e.is_file():
-                convert(e, f"{out}/{i}.ppm", save, display)
+            e = str(e)
+            e += ".pgm"
+            ppm, to_display = convert(os.path.join(input, e), save, display)
+            if save:
+                output_name = os.path.join(out, os.path.splitext(e)[0] + ".ppm")
+                save_image(ppm, output_name)
+            if display:
+                image_pile.append(to_display)
+            #     display_image(to_display)
+        if display:
+            for image in image_pile:
+                display_image(image, ips)
+            cv2.destroyAllWindows()
         print("Done :)")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("file_in")
-    parser.add_argument("--save", nargs="?", const="out.ppm", default=None)
+    parser.add_argument("--save", nargs="?", const="", default=None)
     parser.add_argument("--display", action="store_true")
+    parser.add_argument("--ips", type=int, default=25)
     args = parser.parse_args()
-    if args.save is None and not args.display:
-        if os.path.isdir(args.file_in):
-            args.save = "out"
-        else:
-            args.save = "out.ppm"
-    handle_directories(args.file_in, args.save, args.save is not None, args.display)
+    if os.path.isdir(args.file_in):
+        default_out = "out"
+    else:
+        default_out = "out.ppm"
+    if args.save == "" or (args.save is None and not args.display):
+        args.save = default_out
 
-# convert("images_stack/0.pgm", "test.ppm")
+    handle_directories(
+        args.file_in, args.save, args.save is not None, args.display, args.ips
+    )
