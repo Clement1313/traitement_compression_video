@@ -98,6 +98,8 @@ if __name__ == "__main__":
     parser.add_argument("--save", nargs="?", const="out.ppm", default=None)
     parser.add_argument("--display", action="store_true")
     args = parser.parse_args()
+    if args.save is None and not args.display:
+        args.save = "out.ppm"
     print(args.file_in)
     print(args.save)
     print(args.display)
