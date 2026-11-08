@@ -106,7 +106,7 @@ def handle_directories(input, out, save, display, ips):
     if not os.path.exists(input):
         raise Exception("Invalid path")
     if os.path.isfile(input):
-        ppm, to_display = convert(input, out, save, display)
+        ppm, to_display = convert(input, save, display)
         if save:
             save_image(ppm, out)
         if display:
@@ -149,8 +149,15 @@ if __name__ == "__main__":
     parser.add_argument("file_in")
     parser.add_argument("--save", nargs="?", const="", default=None)
     parser.add_argument("--display", action="store_true")
-    parser.add_argument("--ips", type=int, default=25)
+    parser.add_argument("--ips", type=int, default=None)
     args = parser.parse_args()
+    frame_period = os.path.join(args.file_in, "frame_period.txt")
+    ips = args.ips
+    if ips is None and os.path.exists(frame_period):
+        with open(frame_period, "r") as fp:
+            ips = round(27000000 / float(fp.read()))
+    elif args.ips is None:
+        ips = 25
     if os.path.isdir(args.file_in):
         default_out = "out"
     else:
@@ -159,5 +166,5 @@ if __name__ == "__main__":
         args.save = default_out
 
     handle_directories(
-        args.file_in, args.save, args.save is not None, args.display, args.ips
+        args.file_in, args.save, args.save is not None, args.display, ips
     )
