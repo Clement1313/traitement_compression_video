@@ -4,55 +4,52 @@ import numpy as np
 import os
 
 
-def convert(file_in, save, display):
+def read_pgm(file_in):
     with open(file_in, "rb") as input:  # read pgm
         input.read(2)  # magic number
         input.read(1)  # separator
-        width = input.read(3)
+        width = int(input.read(3))
         input.read(1)  # separator
-        height = input.read(3)
+        height = int(input.read(3))
         input.read(1)  # separator
         max_value = input.read(3)
         input.read(1)  # separator
 
-        pixels = input.read()
+        pixels = np.frombuffer(input.read(), dtype=np.uint8).reshape(height, width)
 
     chroma_width = int(width) // 2
     Y_height = int(height) * 2 // 3
-    chroma_heigth = int(Y_height) // 2
     width = int(width)
 
-    Y = bytearray()
-    for i in range(Y_height):
-        for j in range(int(width)):
-            Y.append(pixels[i * width + j])
+    Y = pixels[:Y_height]  # Y_height firsts row, all thje columns
+    # Y = bytearray()
+    # for i in range(Y_height):
+    #     for j in range(int(width)):
+    #         Y.append(pixels[i, j])
 
-    U = bytearray()
-    for i in range(chroma_heigth):
-        for j in range(chroma_width):
-            U.append(pixels[(Y_height + i) * width + j])
+    U = pixels[Y_height:, :chroma_width]
+    # U = bytearray()
+    # for i in range(chroma_heigth):
+    #     for j in range(chroma_width):
+    #         U.append(pixels[Y_height + i, j])
 
-    V = bytearray()
-    for i in range(chroma_heigth):
-        for j in range(chroma_width, chroma_width * 2):
-            V.append(pixels[(Y_height + i) * width + j])
+    V = pixels[Y_height:, chroma_width:]
+    # V = bytearray()
+    # for i in range(chroma_heigth):
+    #     for j in range(chroma_width, chroma_width * 2):
+    #         V.append(pixels[Y_height + i, j])
 
-    # create ppm
-    out = b""
-    if save:
-        out = b"P3\n"
-        out += f"{int(width)} {int(Y_height)}\n".encode()
-        out += f"{int(max_value)}\n".encode()
+    return Y, U, V, Y_height, width, chroma_width, max_value
 
-    # create image for display
+
+def YUV_to_RGB(Y, U, V, Y_height, width, chroma_width, max_value):
     img = np.empty((int(Y_height), int(width), 3), dtype=np.uint8)
 
     for i in range(Y_height):
-        line = ""
         for j in range(width):
-            y_current = Y[i * width + j] - 16
-            u_current = U[(i // 2) * chroma_width + (j // 2)] - 128
-            v_current = V[(i // 2) * chroma_width + (j // 2)] - 128
+            y_current = int(Y[i, j]) - 16
+            u_current = int(U[(i // 2), (j // 2)]) - 128
+            v_current = int(V[(i // 2), (j // 2)]) - 128
 
             r_current = max(
                 0,
@@ -72,29 +69,24 @@ def convert(file_in, save, display):
                 0,
                 min(round(y_current * 1.164 + 2.017 * u_current), int(max_value)),
             )
-            if save:
-                line += (
-                    str(r_current) + " " + str(g_current) + " " + str(b_current) + "\n"
-                )
 
-            if display:
-                img[i, j] = np.array([b_current, g_current, r_current])
-        if save:
-            out += line.encode()
+            img[i, j] = np.array([b_current, g_current, r_current])
 
-    if save and display:
-        return out, img
-
-    if save:
-        return out, None
-
-    if display:
-        return None, img
+    return img
 
 
-def save_image(out, file_out):
-    with open(file_out, "wb") as out_file:  # write ppm
-        out_file.write(out)
+def convert(file_in):
+    Y, U, V, Y_height, width, chroma_width, max_value = read_pgm(file_in)
+    img = YUV_to_RGB(Y, U, V, Y_height, width, chroma_width, max_value)
+    return img
+
+
+def write_file(file_out, max_value, img):
+    height, width, _ = img.shape
+    rgb = img[:, :, ::-1].reshape(-1, 3)
+    with open(file_out, "w") as f:
+        f.write(f"P3\n{width} {height}\n{max_value}\n")
+        np.savetxt(f, rgb, fmt="%d")
 
 
 def display_image(img, ips=1):
@@ -106,11 +98,11 @@ def handle_directories(input, out, save, display, ips):
     if not os.path.exists(input):
         raise Exception("Invalid path")
     if os.path.isfile(input):
-        ppm, to_display = convert(input, save, display)
+        img = convert(input)
         if save:
-            save_image(ppm, out)
+            write_file(out, 255, img)
         if display:
-            display_image(to_display)
+            display_image(img, ips)
     else:
         if save and not os.path.exists(out):
             os.makedirs(out)
@@ -130,13 +122,12 @@ def handle_directories(input, out, save, display, ips):
                 print(f"image {i}...")
             e = str(e)
             e += ".pgm"
-            ppm, to_display = convert(os.path.join(input, e), save, display)
+            img = convert(os.path.join(input, e))
             if save:
                 output_name = os.path.join(out, os.path.splitext(e)[0] + ".ppm")
-                save_image(ppm, output_name)
+                write_file(output_name, 255, img)
             if display:
-                image_pile.append(to_display)
-            #     display_image(to_display)
+                image_pile.append(img)
         if display:
             for image in image_pile:
                 display_image(image, ips)
