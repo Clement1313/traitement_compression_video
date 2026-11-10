@@ -93,10 +93,27 @@ def YUV_to_RGB(Y, U, V, Y_height, width, chroma_width, max_value):
     #==========================================================================================
 
 
-def convert(file_in):
+def desentrelacement(field, top_field_first):
+    top = field[0::2, :]
+    bottom = field[1::2, :]
+    top = np.repeat(top, 2, axis=0)
+    bottom = np.repeat(bottom, 2, axis=0)
+
+    return (top, bottom) if top_field_first else (bottom, top) 
+
+def convert(file_in, top_field_first, bob):
     Y, U, V, Y_height, width, chroma_width, max_value = read_pgm(file_in)
+    if bob:
+        top_Y, bottom_Y = desentrelacement(Y, top_field_first)
+        top_U, bottom_U = desentrelacement(U, top_field_first)
+        top_V, bottom_V = desentrelacement(V, top_field_first)
+
+        img_top = YUV_to_RGB(top_Y, top_U, top_V, Y_height, width, chroma_width, max_value)
+        img_bottom = YUV_to_RGB(bottom_Y, bottom_U, bottom_V, Y_height, width, chroma_width, max_value)
+        return [img_top, img_bottom]
+
     img = YUV_to_RGB(Y, U, V, Y_height, width, chroma_width, max_value)
-    return img
+    return [img]
 
 
 def write_file(file_out, max_value, img):
@@ -112,15 +129,23 @@ def display_image(img, ips=1):
     cv2.waitKey(round(max(1, 1000 / ips)))
 
 
-def handle_directories(input, out, save, display, ips):
+def handle_directories(input, out, save, display, ips, bob, top_field_first):
     if not os.path.exists(input):
         raise Exception("Invalid path")
+    if bob and ips is not None:
+        ips *= 2
+
     if os.path.isfile(input):
-        img = convert(input)
+        imgs = convert(input, top_field_first, bob)
         if save:
-            write_file(out, 255, img)
+            name, ext = os.path.splitext(out)
+            write_file(f"{name}{ext}", 255, imgs[0])
+            if len(imgs) == 2:
+                write_file(f"{name}_1{ext}", 255, imgs[1])
         if display:
-            display_image(img, ips)
+            display_image(imgs[0], ips)
+            if len(imgs) == 2:
+                display_image(imgs[1], ips)
     else:
         if save and not os.path.exists(out):
             os.makedirs(out)
@@ -134,18 +159,25 @@ def handle_directories(input, out, save, display, ips):
             sorted_names.append(int(name.split(".")[0]))  # remove extention
 
         sorted_names = sorted(sorted_names)
-
+        index_img = 0
         for i, e in enumerate(sorted_names):
             if i % 10 == 0:
                 print(f"image {i}...")
             e = str(e)
             e += ".pgm"
-            img = convert(os.path.join(input, e))
+            imgs = convert(os.path.join(input, e), top_field_first, bob)
             if save:
-                output_name = os.path.join(out, os.path.splitext(e)[0] + ".ppm")
-                write_file(output_name, 255, img)
+                output_name = os.path.join(out, str(index_img) + ".ppm")
+                index_img += 1
+                write_file(output_name, 255, imgs[0])
+                if bob:
+                    output_name = os.path.join(out, str(index_img) + ".ppm")
+                    index_img += 1
+                    write_file(output_name, 255, imgs[1])
             if display:
-                image_pile.append(img)
+                image_pile.append(imgs[0])
+                if bob:
+                    image_pile.append(imgs[1])
         if display:
             for image in image_pile:
                 display_image(image, ips)
@@ -159,6 +191,8 @@ if __name__ == "__main__":
     parser.add_argument("--save", nargs="?", const="", default=None)
     parser.add_argument("--display", action="store_true")
     parser.add_argument("--ips", type=int, default=None)
+    parser.add_argument("--bottom_field_first", action="store_true")
+    parser.add_argument("--bob", action="store_true")
     args = parser.parse_args()
     frame_period = os.path.join(args.file_in, "frame_period.txt")
     ips = args.ips
@@ -175,5 +209,6 @@ if __name__ == "__main__":
         args.save = default_out
 
     handle_directories(
-        args.file_in, args.save, args.save is not None, args.display, ips
+        args.file_in, args.save, args.save is not None, args.display, ips, args.bob, not args.bottom_field_first
     )
+
