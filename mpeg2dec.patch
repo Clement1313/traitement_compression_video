@@ -1,0 +1,60 @@
+diff --git a/src/mpeg2dec.c b/src/mpeg2dec.c
+index 59b36d7..fbe4aac 100644
+--- a/src/mpeg2dec.c
++++ b/src/mpeg2dec.c
+@@ -44,6 +44,7 @@
+ 
+ static int buffer_size = 4096;
+ static FILE * in_file;
++static FILE * flags;
+ static int demux_track = 0;
+ static int demux_pid = 0;
+ static int demux_pva = 0;
+@@ -319,6 +320,13 @@ static void decode_mpeg2 (uint8_t * current, uint8_t * end)
+ 		mpeg2_set_buf (mpeg2dec, buf, id);
+ 	    }
+ 	    mpeg2_skip (mpeg2dec, (output->draw == NULL));
++		
++		FILE* fptr;
++		fptr = fopen("frame_period.txt", "w");
++		if (fptr != NULL) {
++			fprintf(fptr, "%u", info->sequence->frame_period);
++			fclose(fptr);
++		}
+ 	    break;
+ 	case STATE_PICTURE:
+ 	    /* might skip */
+@@ -336,6 +344,8 @@ static void decode_mpeg2 (uint8_t * current, uint8_t * end)
+ 	    break;
+ 	case STATE_SLICE:
+ 	case STATE_END:
++		if (info->display_picture != NULL)
++			printf("progressive_frame: %d, top_field_first: %d, reapeat first field: %d \n", (PIC_FLAG_PROGRESSIVE_FRAME & info->display_picture->flags) != 0, (PIC_FLAG_TOP_FIELD_FIRST & info->display_picture->flags) != 0, (PIC_FLAG_REPEAT_FIRST_FIELD & info->display_picture->flags) != 0);
+ 	case STATE_INVALID_END:
+ 	    /* draw current picture */
+ 	    /* might free frame buffer */
+@@ -344,6 +354,9 @@ static void decode_mpeg2 (uint8_t * current, uint8_t * end)
+ 		    output->draw (output, info->display_fbuf->buf,
+ 				  info->display_fbuf->id);
+ 		print_fps (0);
++		if (flags != NULL) {
++			fprintf(flags, "%d %d %d \n", (PIC_FLAG_PROGRESSIVE_FRAME & info->display_picture->flags) != 0, (PIC_FLAG_TOP_FIELD_FIRST & info->display_picture->flags) != 0, (PIC_FLAG_REPEAT_FIRST_FIELD & info->display_picture->flags) != 0);
++		}
+ 	    }
+ 	    if (output->discard && info->discard_fbuf)
+ 		output->discard (output, info->discard_fbuf->buf,
+@@ -777,6 +790,7 @@ int main (int argc, char ** argv)
+ 	fprintf (stderr, "Can not open output\n");
+ 	return 1;
+     }
++	flags = fopen("flags.txt", "w");
+     mpeg2dec = mpeg2_init ();
+     if (mpeg2dec == NULL)
+ 	exit (1);
+@@ -796,5 +810,6 @@ int main (int argc, char ** argv)
+ 	output->close (output);
+     print_fps (1);
+     fclose (in_file);
++	fclose (flags);
+     return 0;
+ }
