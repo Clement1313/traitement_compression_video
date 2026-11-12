@@ -43,53 +43,23 @@ def read_pgm(file_in):
 
 
 def YUV_to_RGB(Y, U, V, Y_height, width, chroma_width, max_value):
-    # img = np.empty((int(Y_height), int(width), 3), dtype=np.uint8)
+    Y = Y.astype(np.float32) - 16
+    U = U.astype(np.float32) - 128
+    V = V.astype(np.float32) - 128
 
-    # for i in range(Y_height):
-    #     for j in range(width):
-    #         y_current = int(Y[i, j]) - 16
-    #         u_current = int(U[(i // 2), (j // 2)]) - 128
-    #         v_current = int(V[(i // 2), (j // 2)]) - 128
+    U = np.repeat(U, 2, axis=1)
+    V = np.repeat(V, 2, axis=1)
 
-    #         r_current = max(
-    #             0,
-    #             min(
-    #                 round(y_current * 1.164 + 1.596 * v_current),
-    #                 int(max_value),
-    #             ),
-    #         )
-    #         g_current = max(
-    #             0,
-    #             min(
-    #                 round(y_current * 1.164 - u_current * 0.392 - v_current * 0.813),
-    #                 int(max_value),
-    #             ),
-    #         )
-    #         b_current = max(
-    #             0,
-    #             min(round(y_current * 1.164 + 2.017 * u_current), int(max_value)),
-    #         )
+    R = Y * 1.164 + 1.596 * V
+    G = Y * 1.164 - U * 0.392 - V * 0.813
+    B = Y * 1.164 + 2.017 * U
 
-    #         img[i, j] = np.array([b_current, g_current, r_current])
+    R = np.clip(np.round(R), min=0, max=int(max_value))
+    G = np.clip(np.round(G), min=0, max=int(max_value))
+    B = np.clip(np.round(B), min=0, max=int(max_value))
 
-    # return img
-
-    # ==============================ATTENTION CODE IA==========================================
-    # A SUPPRIMER ET DECOMMENTER LE CODE CI DESSUS.
-    y = Y.astype(np.float32) - 16
-    u = U.astype(np.float32) - 128
-    v = V.astype(np.float32) - 128
-
-    u = np.repeat(u, 2, axis=1)
-    v = np.repeat(v, 2, axis=1)
-
-    r = 1.164 * y + 1.596 * v
-    g = 1.164 * y - 0.392 * u - 0.813 * v
-    b = 1.164 * y + 2.017 * u
-
-    img = np.stack([b, g, r], axis=-1)  # ordre BGR, forme (480, 720, 3)
-    return np.clip(np.round(img), 0, int(max_value)).astype(np.uint8)
-    # ==========================================================================================
+    img = np.stack((B, G, R), axis=-1)
+    return img.astype(np.uint8)
 
 
 def desentrelacement_UV(field, top_field_first):
