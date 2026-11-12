@@ -80,8 +80,8 @@ def YUV_to_RGB(Y, U, V, Y_height, width, chroma_width, max_value):
     u = U.astype(np.float32) - 128
     v = V.astype(np.float32) - 128
 
-    u = np.repeat(np.repeat(u, 2, axis=0), 2, axis=1)
-    v = np.repeat(np.repeat(v, 2, axis=0), 2, axis=1)
+    u = np.repeat(u, 2, axis=1)
+    v = np.repeat(v, 2, axis=1)
 
     r = 1.164 * y + 1.596 * v
     g = 1.164 * y - 0.392 * u - 0.813 * v
@@ -92,7 +92,30 @@ def YUV_to_RGB(Y, U, V, Y_height, width, chroma_width, max_value):
     # ==========================================================================================
 
 
-def desentrelacement(field, top_field_first):
+def desentrelacement_UV(field, top_field_first):
+    top = field[0::2, :]
+    bottom = field[1::2, :]
+
+    top = cv2.resize(
+        top, (top.shape[1], top.shape[0] * 2), interpolation=cv2.INTER_LINEAR
+    )
+    bottom = cv2.resize(
+        bottom, (bottom.shape[1], bottom.shape[0] * 2), interpolation=cv2.INTER_LINEAR
+    )
+
+    top = np.repeat(top, 2, axis=0)
+    bottom = np.repeat(bottom, 2, axis=0)
+
+    return (top, bottom) if top_field_first else (bottom, top)
+
+
+def upsample_UV(field):
+    return cv2.resize(
+        field, (field.shape[1], field.shape[0] * 2), interpolation=cv2.INTER_LINEAR
+    )
+
+
+def desentrelacement_Y(field, top_field_first):
     top = field[0::2, :]
     bottom = field[1::2, :]
     top = np.repeat(top, 2, axis=0)
@@ -118,9 +141,9 @@ def convert(file_in, bob, flags, top_field_first_option):
                 else top_field_first
             )
             if not progressive_frame:
-                top_Y, bottom_Y = desentrelacement(Y, top_field_first)
-                top_U, bottom_U = desentrelacement(U, top_field_first)
-                top_V, bottom_V = desentrelacement(V, top_field_first)
+                top_Y, bottom_Y = desentrelacement_Y(Y, top_field_first)
+                top_U, bottom_U = desentrelacement_UV(U, top_field_first)
+                top_V, bottom_V = desentrelacement_UV(V, top_field_first)
 
                 img_top = YUV_to_RGB(
                     top_Y, top_U, top_V, Y_height, width, chroma_width, max_value
@@ -136,7 +159,9 @@ def convert(file_in, bob, flags, top_field_first_option):
                 )
                 return [img_top, img_bottom]
 
-    img = YUV_to_RGB(Y, U, V, Y_height, width, chroma_width, max_value)
+    img = YUV_to_RGB(
+        Y, upsample_UV(U), upsample_UV(V), Y_height, width, chroma_width, max_value
+    )
     return [img]
 
 
